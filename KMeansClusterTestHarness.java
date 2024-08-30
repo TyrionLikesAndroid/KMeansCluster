@@ -1,6 +1,12 @@
+import javax.swing.text.Style;
+import java.awt.*;
+import java.awt.geom.Point2D;
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Random;
 
 public class KMeansClusterTestHarness {
 
@@ -12,17 +18,22 @@ public class KMeansClusterTestHarness {
 
     static float [][] irisDataSet;     // Data member for our iris dataset
     static float [][] kmtestDataSet;     // Data member for our iris dataset
+    static Random random;
 
     public static void main(String[] args)
     {
         irisDataSet = new float[NUM_IRIS_DATA_COLUMNS][NUM_IRIS_DATA_ROWS];
         kmtestDataSet = new float[NUM_KMTEST_DATA_COLUMNS][NUM_KMTEST_DATA_ROWS];
+        random = new Random();
 
         // Load the iris.csv file
         loadIrisFile();
 
         // Load the kmtest.csv file
         loadKmtestFile();
+
+        // Analyze kmtest data
+        analyzeKmtestData();
     }
 
     private static boolean loadIrisFile()
@@ -53,11 +64,11 @@ public class KMeansClusterTestHarness {
         }
 
         // Verify the data capture was valid
-        for(int j = 0; j <= NUM_IRIS_DATA_ROWS-1; j++) {
+       /* for(int j = 0; j <= NUM_IRIS_DATA_ROWS-1; j++) {
             for (int i = 0; i <= NUM_IRIS_DATA_COLUMNS - 1; i++)
                 System.out.print("[" + irisDataSet[i][j] + "]");
             System.out.println();
-        }
+        }*/
 
         return out;
     }
@@ -92,12 +103,79 @@ public class KMeansClusterTestHarness {
         }
 
         // Verify the data capture was valid
-        for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++) {
+        /*for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++) {
             for (int i = 0; i <= NUM_KMTEST_DATA_COLUMNS - 1; i++)
                 System.out.print("[" + kmtestDataSet[i][j] + "]");
             System.out.println();
-        }
+        }*/
 
         return out;
+    }
+
+    static Point2D.Float createRandomPoint(float limit)
+    {
+        float x = random.nextFloat(0, limit);
+        float y = random.nextFloat(0, limit);
+        return new Point2D.Float(x,y);
+    }
+
+    static void analyzeKmtestData()
+    {
+        //Initialize values of K
+        int[] kValues = { 2, 3, 4, 5};
+
+        // Analyze without normalization for our values of K
+        for(int i = 0; i < kValues.length; i++)
+        {
+            int kValue = kValues[i];
+            System.out.println("Iteration for K=" + kValue);
+
+            //Initialize our centroid list with seeds and our holding list before we iterate
+            LinkedList<Point2D.Float> centroidList = new LinkedList<>();
+            HashMap<Integer,LinkedList<Point2D.Float>> holdingList = new HashMap<>();
+            for(int j = 0; j < kValue; j++) {
+                centroidList.add(createRandomPoint(20f));
+                holdingList.put(j, new LinkedList<>());
+            }
+
+            // Iterate through the kmtest data and determine which points are closest to which centroids
+            double closestDistance = 999;
+            Iterator<Point2D.Float> iter = centroidList.iterator();
+            for(int km_y = 0; km_y <= NUM_KMTEST_DATA_ROWS-1; km_y++)
+            {
+
+                int currentCentroidLabel = 0;
+                int closestCentroidLabel = 0;
+
+                Point2D.Float kmPoint = new Point2D.Float(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
+                while(iter.hasNext())
+                {
+                    Point2D.Float centroidPoint = iter.next();
+                    double distance = kmPoint.distance(centroidPoint);
+                    if(distance < closestDistance)
+                    {
+                        //System.out.println("Centroid Label[" + currentCentroidLabel + "] with distance [ " + distance +
+                                       // "] is closer to " + kmPoint);
+                        closestCentroidLabel = currentCentroidLabel;
+                        closestDistance = distance;
+                    }
+                    //else
+                        //System.out.println("Centroid Label[" + currentCentroidLabel + "] with distance [ " + distance +
+                             //   "] is farther to " + kmPoint);
+
+                    currentCentroidLabel++;
+                }
+
+                holdingList.get(closestCentroidLabel).add(kmPoint);
+                iter = centroidList.iterator();
+                closestDistance = 999;
+            }
+
+            // Evaluate our holding list and see what went where
+            for(int j = 0; j < kValue; j++)
+            {
+                System.out.println("Holding List label [" + centroidList.get(j) + "] size=" + holdingList.get(j).size());
+            }
+        }
     }
 }
