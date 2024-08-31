@@ -107,13 +107,18 @@ public class KMeansClusterTestHarness {
         loadKmtestFile();
 
         // Analyze kmtest data
-        analyzeKmtestData(new FloatDataRow(0f, 0f), new FloatDataRow(18f, 12f));
+        int[] kmtestKValues = { 2, 3, 4, 5 };
+        analyzeDataSet(kmtestKValues, kmtestDataSet, new FloatDataRow(0f, 0f), new FloatDataRow(18f, 12f));
 
         // Normalize kmtest data
         normalizeKmtestData();
 
-        // Analyze kmtest data after normalization
-        analyzeKmtestData(new FloatDataRow(-2f, -2f), new FloatDataRow(2f, 2f));
+        // Analyze kmtest data after normalization (note the new min/max values)
+        analyzeDataSet(kmtestKValues, kmtestDataSet, new FloatDataRow(-2f, -2f), new FloatDataRow(2f, 2f));
+
+        // Analyze the iris data
+        int[] irisKValues = { 3 };
+        analyzeDataSet(irisKValues, irisDataSet, new FloatDataRow(4f, 1f, 0f, 0f), new FloatDataRow(8f, 5f, 7f, 3f));
     }
 
     private static boolean loadIrisFile()
@@ -192,7 +197,7 @@ public class KMeansClusterTestHarness {
         return out;
     }
 
-    static FloatDataRow createRandomPoint(FloatDataRow min, FloatDataRow max)
+    static FloatDataRow createRandomRow(FloatDataRow min, FloatDataRow max)
     {
         FloatDataRow out = new FloatDataRow(min.size);
         for(int i=0; i < min.size; i++)
@@ -201,15 +206,12 @@ public class KMeansClusterTestHarness {
         return out;
     }
 
-    static void analyzeKmtestData(FloatDataRow min, FloatDataRow max)
+    static void analyzeDataSet(int[] kValues, float [][] testSet, FloatDataRow min, FloatDataRow max)
     {
-        //Initialize values of K
-        int[] kValues = { 2, 3, 4, 5 };
-
         // Create a holder for the winning combinations
         HashMap<Integer, WinningCombination> winners = new HashMap<>();
 
-        // Analyze without normalization for our values of K
+        // Analyze the dataset for our values of K
         for(int i = 0; i < kValues.length; i++)
         {
             int kValue = kValues[i];
@@ -224,13 +226,16 @@ public class KMeansClusterTestHarness {
                 LinkedList<FloatDataRow> centroidList = new LinkedList<>();
                 HashMap<Integer, LinkedList<FloatDataRow>> holdingList = new HashMap<>();
                 for (int j = 0; j < kValue; j++) {
-                    centroidList.add(createRandomPoint(min, max));
+                    centroidList.add(createRandomRow(min, max));
                     holdingList.put(j, new LinkedList<>());
                 }
 
                 int safetyExit = 0;
                 boolean stableCentroids = false;
-                while (!stableCentroids) {
+
+                // Run the iteration until we have stable centroids.  Don't worry, there is a safety exit below
+                while (! stableCentroids)
+                {
                     System.out.println("\nIteration[" + loop + "-" + safetyExit + "]");
 
                     // Print out the current centroid for each value of K
@@ -239,13 +244,19 @@ public class KMeansClusterTestHarness {
 
                     // Iterate through the kmtest data and determine which points are closest to which centroids
                     double closestDistance = 999;
+                    int numRows = testSet[0].length;
+
                     Iterator<FloatDataRow> iter = centroidList.iterator();
-                    for (int km_y = 0; km_y <= NUM_KMTEST_DATA_ROWS - 1; km_y++) {
+                    for (int km_y = 0; km_y <= numRows - 1; km_y++) {
 
                         int currentCentroidLabel = 0;
                         int closestCentroidLabel = 0;
 
-                        FloatDataRow kmPoint = new FloatDataRow(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
+                        int numColumns = testSet.length;
+                        FloatDataRow kmPoint = new FloatDataRow(numColumns);
+                        for(int col = 0; col < numColumns; col++)
+                            kmPoint.row[col] = testSet[col][km_y];
+
                         while (iter.hasNext()) {
                             FloatDataRow centroidPoint = iter.next();
                             double distance = kmPoint.distance(centroidPoint);
@@ -358,7 +369,7 @@ public class KMeansClusterTestHarness {
 
             for(int j = 0; j < kValue; j++)
             {
-                System.out.println("Centroid = " + winner.centroids.get(j));
+                System.out.println("Centroid = " + winner.centroids.get(j) + " size = " + winner.clusters.get(j).size());
                 Iterator<FloatDataRow> pIter = winner.clusters.get(j).iterator();
                 while(pIter.hasNext())
                 {
