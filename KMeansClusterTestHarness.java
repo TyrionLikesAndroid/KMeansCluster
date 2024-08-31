@@ -1,6 +1,3 @@
-import javax.swing.text.Style;
-import java.awt.*;
-import java.awt.geom.Point2D;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.HashMap;
@@ -23,8 +20,78 @@ public class KMeansClusterTestHarness {
     static private class WinningCombination
     {
         public double totalSpread = 0f;
-        LinkedList<Point2D.Float> centroids = new LinkedList<>();
-        HashMap<Integer,LinkedList<Point2D.Float>> clusters = new HashMap<>();
+        LinkedList<FloatDataRow> centroids = new LinkedList<>();
+        HashMap<Integer,LinkedList<FloatDataRow>> clusters = new HashMap<>();
+    }
+
+    static private class FloatDataRow
+    {
+        public int size;
+        public float [] row;
+
+        public FloatDataRow(int size)
+        {
+            this.size = size;
+            this.row = new float[size];
+        }
+
+        public FloatDataRow(float... args)
+        {
+            this.size = args.length;
+            this.row = new float[size];
+
+            for(int i=0; i<args.length; i++)
+                row[i] = args[i];
+        }
+
+        public double distance(FloatDataRow aRow)
+        {
+            double out = 0f;
+
+            if(size != aRow.size)
+            {
+                System.out.println("ERROR - data row size mismatch");
+            }
+            else
+            {
+                for(int i = 0; i < size; i++)
+                    out += Math.pow(row[i] - aRow.row[i], 2);
+
+                out = Math.pow(out, 0.5);
+            }
+
+            return out;
+        }
+
+        public String toString()
+        {
+            String out = new String();
+
+            for(int i = 0; i < size; i++)
+                out = out.concat(row[i] + ", ");
+
+            return out.substring(0, out.length() - 2);
+        }
+
+        public boolean equals(Object obj)
+        {
+            if (obj == null) {
+                return false;
+            }
+
+            if (obj.getClass() != this.getClass()) {
+                return false;
+            }
+
+            final FloatDataRow other = (FloatDataRow) obj;
+            for(int i = 0; i < size; i++)
+            {
+                if(row[i] != other.row[i])
+                    return false;
+            }
+
+            return true;
+        }
     }
 
     public static void main(String[] args)
@@ -40,13 +107,13 @@ public class KMeansClusterTestHarness {
         loadKmtestFile();
 
         // Analyze kmtest data
-        analyzeKmtestData(0f, 18f, 0f, 12f);
+        analyzeKmtestData(new FloatDataRow(0f, 0f), new FloatDataRow(18f, 12f));
 
         // Normalize kmtest data
         normalizeKmtestData();
 
         // Analyze kmtest data after normalization
-        analyzeKmtestData(-2f, 2f, -2f, 2f);
+        analyzeKmtestData(new FloatDataRow(-2f, -2f), new FloatDataRow(2f, 2f));
     }
 
     private static boolean loadIrisFile()
@@ -125,14 +192,16 @@ public class KMeansClusterTestHarness {
         return out;
     }
 
-    static Point2D.Float createRandomPoint(float xMin, float xMax, float yMin, float yMax)
+    static FloatDataRow createRandomPoint(FloatDataRow min, FloatDataRow max)
     {
-        float x = random.nextFloat(xMin, xMax);
-        float y = random.nextFloat(yMin, yMax);
-        return new Point2D.Float(x,y);
+        FloatDataRow out = new FloatDataRow(min.size);
+        for(int i=0; i < min.size; i++)
+            out.row[i]=random.nextFloat(min.row[i], max.row[i]);
+
+        return out;
     }
 
-    static void analyzeKmtestData(float xMin, float xMax, float yMin, float yMax)
+    static void analyzeKmtestData(FloatDataRow min, FloatDataRow max)
     {
         //Initialize values of K
         int[] kValues = { 2, 3, 4, 5 };
@@ -152,10 +221,10 @@ public class KMeansClusterTestHarness {
             for(int loop = 0; loop < 100; loop++)
             {
                 //Initialize our centroid list with seeds and our holding list before we iterate
-                LinkedList<Point2D.Float> centroidList = new LinkedList<>();
-                HashMap<Integer, LinkedList<Point2D.Float>> holdingList = new HashMap<>();
+                LinkedList<FloatDataRow> centroidList = new LinkedList<>();
+                HashMap<Integer, LinkedList<FloatDataRow>> holdingList = new HashMap<>();
                 for (int j = 0; j < kValue; j++) {
-                    centroidList.add(createRandomPoint(xMin, xMax, yMin, yMax));
+                    centroidList.add(createRandomPoint(min, max));
                     holdingList.put(j, new LinkedList<>());
                 }
 
@@ -170,15 +239,15 @@ public class KMeansClusterTestHarness {
 
                     // Iterate through the kmtest data and determine which points are closest to which centroids
                     double closestDistance = 999;
-                    Iterator<Point2D.Float> iter = centroidList.iterator();
+                    Iterator<FloatDataRow> iter = centroidList.iterator();
                     for (int km_y = 0; km_y <= NUM_KMTEST_DATA_ROWS - 1; km_y++) {
 
                         int currentCentroidLabel = 0;
                         int closestCentroidLabel = 0;
 
-                        Point2D.Float kmPoint = new Point2D.Float(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
+                        FloatDataRow kmPoint = new FloatDataRow(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
                         while (iter.hasNext()) {
-                            Point2D.Float centroidPoint = iter.next();
+                            FloatDataRow centroidPoint = iter.next();
                             double distance = kmPoint.distance(centroidPoint);
                             if (distance < closestDistance) {
                                 closestCentroidLabel = currentCentroidLabel;
@@ -200,22 +269,25 @@ public class KMeansClusterTestHarness {
 
                     // Calculate new centroids based on the mean of the points in each grouping
                     int matchingCentroids = 0;
-                    for (int j = 0; j < kValue; j++) {
-                        LinkedList<Point2D.Float> kList = holdingList.get(j);
+                    for (int j = 0; j < kValue; j++)
+                    {
+                        LinkedList<FloatDataRow> kList = holdingList.get(j);
                         if (!kList.isEmpty()) {
                             int size = kList.size();
-                            float xTotal = 0f;
-                            float yTotal = 0f;
+                            FloatDataRow newCentroid = new FloatDataRow(kList.getFirst().size);
 
-                            Iterator<Point2D.Float> pIter = kList.iterator();
-                            while (pIter.hasNext()) {
-                                Point2D.Float aPoint = pIter.next();
-                                xTotal += aPoint.x;
-                                yTotal += aPoint.y;
+                            Iterator<FloatDataRow> pIter = kList.iterator();
+                            while (pIter.hasNext())
+                            {
+                                FloatDataRow aPoint = pIter.next();
+                                for(int k = 0; k < aPoint.size; k++)
+                                    newCentroid.row[k] += aPoint.row[k];
                             }
 
-                            Point2D.Float newCentroid = new Point2D.Float(xTotal / size, yTotal / size);
-                            Point2D.Float oldCentroid = centroidList.remove(j);
+                            for(int k = 0; k < kList.getFirst().size; k++)
+                                newCentroid.row[k] = newCentroid.row[k]/size;
+
+                            FloatDataRow oldCentroid = centroidList.remove(j);
                             centroidList.add(j, newCentroid);
 
                             if (oldCentroid.equals(newCentroid))
@@ -234,29 +306,30 @@ public class KMeansClusterTestHarness {
                         double totalSpread = 0f;
                         for (int j = 0; j < kValue; j++) {
 
-                            Point2D.Float centroid = centroidList.get(j);
-                            Iterator<Point2D.Float> pIter = holdingList.get(j).iterator();
+                            FloatDataRow centroid = centroidList.get(j);
+                            Iterator<FloatDataRow> pIter = holdingList.get(j).iterator();
                             while (pIter.hasNext()) {
-                                Point2D.Float current = pIter.next();
+                                FloatDataRow current = pIter.next();
                                 totalSpread += centroid.distance(current);
                             }
                         }
                         System.out.println("Total Spread for this stable outcome = " + totalSpread);
 
                         // Determine if this is the best combination we have seen yet
-                        if ((!winners.containsKey(kValue)) || (totalSpread < winners.get(kValue).totalSpread)) {
+                        if ((!winners.containsKey(kValue)) || (totalSpread < winners.get(kValue).totalSpread))
+                        {
                             WinningCombination newWinner = new WinningCombination();
                             newWinner.totalSpread = totalSpread;
 
                             for (int j = 0; j < kValue; j++) {
-                                Point2D.Float centroid = centroidList.get(j);
-                                newWinner.centroids.add(new Point2D.Float(centroid.x, centroid.y));
+                                FloatDataRow centroid = centroidList.get(j);
+                                newWinner.centroids.add(new FloatDataRow(centroid.row));
 
-                                LinkedList<Point2D.Float> newList = new LinkedList<>();
-                                Iterator<Point2D.Float> pIter = holdingList.get(j).iterator();
+                                LinkedList<FloatDataRow> newList = new LinkedList<>();
+                                Iterator<FloatDataRow> pIter = holdingList.get(j).iterator();
                                 while (pIter.hasNext()) {
-                                    Point2D.Float current = pIter.next();
-                                    newList.add(new Point2D.Float(current.x, current.y));
+                                    FloatDataRow current = pIter.next();
+                                    newList.add(new FloatDataRow(current.row));
                                 }
                                 newWinner.clusters.put(j, newList);
                             }
@@ -286,7 +359,7 @@ public class KMeansClusterTestHarness {
             for(int j = 0; j < kValue; j++)
             {
                 System.out.println("Centroid = " + winner.centroids.get(j));
-                Iterator<Point2D.Float> pIter = winner.clusters.get(j).iterator();
+                Iterator<FloatDataRow> pIter = winner.clusters.get(j).iterator();
                 while(pIter.hasNext())
                 {
                     System.out.println("   Point = " + pIter.next());
@@ -295,9 +368,9 @@ public class KMeansClusterTestHarness {
         }
     }
 
-    static Float calculateMean(LinkedList<Float> numbers)
+    static float calculateMean(LinkedList<Float> numbers)
     {
-        Float out = 0f;
+        float out = 0f;
         int size = numbers.size();
 
         Iterator<Float> iter = numbers.iterator();
@@ -307,11 +380,11 @@ public class KMeansClusterTestHarness {
         return (out/size);
     }
 
-    static Double calculateStdDev(LinkedList<Float> numbers)
+    static double calculateStdDev(LinkedList<Float> numbers)
     {
-        Double out = 0.0;
+        double out = 0.0;
         int size = numbers.size();
-        Float mean = calculateMean(numbers);
+        float mean = calculateMean(numbers);
 
         Iterator<Float> iter = numbers.iterator();
         while(iter.hasNext())
@@ -322,7 +395,7 @@ public class KMeansClusterTestHarness {
         return out;
     }
 
-    static double calculateZScoreNormal(Float original, Float mean, Double stdDev)
+    static double calculateZScoreNormal(float original, float mean, double stdDev)
     {
         return (original - mean)/stdDev;
     }
@@ -357,11 +430,11 @@ public class KMeansClusterTestHarness {
         for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++)
         {
             // x coordinates
-            Float originalX = kmtestDataSet[0][j];
+            float originalX = kmtestDataSet[0][j];
             kmtestDataSet[0][j] = (float) calculateZScoreNormal(originalX, xMean, xStdDev);
 
             // y coordinates
-            Float originalY = kmtestDataSet[1][j];
+            float originalY = kmtestDataSet[1][j];
             kmtestDataSet[1][j] = (float) calculateZScoreNormal(originalY, yMean, yStdDev);
         }
 
