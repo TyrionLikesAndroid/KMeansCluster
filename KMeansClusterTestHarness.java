@@ -112,17 +112,18 @@ public class KMeansClusterTestHarness {
         return out;
     }
 
-    static Point2D.Float createRandomPoint(float limit)
+    static Point2D.Float createRandomPoint(float xLimit, float yLimit)
     {
-        float x = random.nextFloat(0, limit);
-        float y = random.nextFloat(0, limit);
+        float x = random.nextFloat(0, xLimit);
+        float y = random.nextFloat(0, yLimit);
         return new Point2D.Float(x,y);
     }
 
     static void analyzeKmtestData()
     {
         //Initialize values of K
-        int[] kValues = { 2, 3, 4, 5};
+        //int[] kValues = { 2, 3, 4, 5};
+        int[] kValues = { 4 };
 
         // Analyze without normalization for our values of K
         for(int i = 0; i < kValues.length; i++)
@@ -134,47 +135,107 @@ public class KMeansClusterTestHarness {
             LinkedList<Point2D.Float> centroidList = new LinkedList<>();
             HashMap<Integer,LinkedList<Point2D.Float>> holdingList = new HashMap<>();
             for(int j = 0; j < kValue; j++) {
-                centroidList.add(createRandomPoint(20f));
+                centroidList.add(createRandomPoint(18f, 12f));
                 holdingList.put(j, new LinkedList<>());
             }
 
-            // Iterate through the kmtest data and determine which points are closest to which centroids
-            double closestDistance = 999;
-            Iterator<Point2D.Float> iter = centroidList.iterator();
-            for(int km_y = 0; km_y <= NUM_KMTEST_DATA_ROWS-1; km_y++)
+            int safetyExit = 0;
+            boolean stableCentroids = false;
+            while(! stableCentroids)
             {
+                // Print out the current centroid for each value of K
+                for (int j = 0; j < kValue; j++)
+                    System.out.println(centroidList.get(j));
 
-                int currentCentroidLabel = 0;
-                int closestCentroidLabel = 0;
+                // Iterate through the kmtest data and determine which points are closest to which centroids
+                double closestDistance = 999;
+                Iterator<Point2D.Float> iter = centroidList.iterator();
+                for (int km_y = 0; km_y <= NUM_KMTEST_DATA_ROWS - 1; km_y++) {
 
-                Point2D.Float kmPoint = new Point2D.Float(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
-                while(iter.hasNext())
-                {
-                    Point2D.Float centroidPoint = iter.next();
-                    double distance = kmPoint.distance(centroidPoint);
-                    if(distance < closestDistance)
-                    {
-                        //System.out.println("Centroid Label[" + currentCentroidLabel + "] with distance [ " + distance +
-                                       // "] is closer to " + kmPoint);
-                        closestCentroidLabel = currentCentroidLabel;
-                        closestDistance = distance;
+                    int currentCentroidLabel = 0;
+                    int closestCentroidLabel = 0;
+
+                    Point2D.Float kmPoint = new Point2D.Float(kmtestDataSet[0][km_y], kmtestDataSet[1][km_y]);
+                    while (iter.hasNext()) {
+                        Point2D.Float centroidPoint = iter.next();
+                        double distance = kmPoint.distance(centroidPoint);
+                        if (distance < closestDistance)
+                        {
+                            closestCentroidLabel = currentCentroidLabel;
+                            closestDistance = distance;
+                        }
+
+                        currentCentroidLabel++;
                     }
-                    //else
-                        //System.out.println("Centroid Label[" + currentCentroidLabel + "] with distance [ " + distance +
-                             //   "] is farther to " + kmPoint);
 
-                    currentCentroidLabel++;
+                    holdingList.get(closestCentroidLabel).add(kmPoint);
+                    iter = centroidList.iterator();
+                    closestDistance = 999;
                 }
 
-                holdingList.get(closestCentroidLabel).add(kmPoint);
-                iter = centroidList.iterator();
-                closestDistance = 999;
-            }
+                // Evaluate our holding list and see what went where
+                for (int j = 0; j < kValue; j++) {
+                    System.out.println("Holding List label [" + centroidList.get(j) + "] size=" + holdingList.get(j).size());
+                }
 
-            // Evaluate our holding list and see what went where
-            for(int j = 0; j < kValue; j++)
-            {
-                System.out.println("Holding List label [" + centroidList.get(j) + "] size=" + holdingList.get(j).size());
+                // Calculate new centroids based on the mean of the points in each grouping
+                int matchingCentroids = 0;
+                for (int j = 0; j < kValue; j++)
+                {
+                    LinkedList<Point2D.Float> kList = holdingList.get(j);
+                    if(! kList.isEmpty())
+                    {
+                        int size = kList.size();
+                        float xTotal = 0f;
+                        float yTotal = 0f;
+
+                        Iterator<Point2D.Float> pIter = kList.iterator();
+                        while(pIter.hasNext())
+                        {
+                            Point2D.Float aPoint = pIter.next();
+                            xTotal += aPoint.x;
+                            yTotal += aPoint.y;
+                        }
+
+                        Point2D.Float newCentroid = new Point2D.Float(xTotal/size, yTotal/size);
+                        Point2D.Float oldCentroid = centroidList.remove(j);
+                        centroidList.add(j, newCentroid);
+
+                        if(oldCentroid.equals(newCentroid))
+                            matchingCentroids++;
+                    }
+                    else
+                        matchingCentroids++;
+                }
+
+                // Check exit conditions.  If the centroids are stable or we trigger our safety exit, leave the loop
+                safetyExit++;
+                if((matchingCentroids == kValue) || (safetyExit > 5))
+                {
+                    stableCentroids = true;
+                    System.out.println("Exit on iteration [" + safetyExit + "] matchingCentriods = " + matchingCentroids);
+
+                    // Measure the density of the configuration to see if we have a local max or an overall max
+                    double totalSpread = 0f;
+                    for (int j = 0; j < kValue; j++) {
+
+                        Point2D.Float centroid = centroidList.get(j);
+                        Iterator<Point2D.Float> pIter = holdingList.get(j).iterator();
+                        while(pIter.hasNext())
+                        {
+                            Point2D.Float current = pIter.next();
+                            totalSpread += centroid.distance(current);
+                        }
+                    }
+                    System.out.println("Total Spread for this stable outcome = " + totalSpread);
+                }
+                else
+                {
+                    // Clear the holding list if we are about to iterate again
+                    for (int j = 0; j < kValue; j++) {
+                        holdingList.get(j).clear();
+                    }
+                }
             }
         }
     }
