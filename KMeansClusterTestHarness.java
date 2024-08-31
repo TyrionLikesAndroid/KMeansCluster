@@ -111,7 +111,7 @@ public class KMeansClusterTestHarness {
         analyzeDataSet(kmtestKValues, kmtestDataSet, new FloatDataRow(0f, 0f), new FloatDataRow(18f, 12f));
 
         // Normalize kmtest data
-        normalizeKmtestData();
+        normalizeDataSet(kmtestDataSet);
 
         // Analyze kmtest data after normalization (note the new min/max values)
         analyzeDataSet(kmtestKValues, kmtestDataSet, new FloatDataRow(-2f, -2f), new FloatDataRow(2f, 2f));
@@ -119,6 +119,10 @@ public class KMeansClusterTestHarness {
         // Analyze the iris data
         int[] irisKValues = { 3 };
         analyzeDataSet(irisKValues, irisDataSet, new FloatDataRow(4f, 1f, 0f, 0f), new FloatDataRow(8f, 5f, 7f, 3f));
+
+        // Normalize the iris data just to see if it clusters better
+        normalizeDataSet(irisDataSet);
+        analyzeDataSet(irisKValues, irisDataSet, new FloatDataRow(-2f, -2f, -2f, -2f), new FloatDataRow(2f, 2f, 2f, 2f));
     }
 
     private static boolean loadIrisFile()
@@ -147,13 +151,6 @@ public class KMeansClusterTestHarness {
             e.printStackTrace();
             out = false;
         }
-
-        // Verify the data capture was valid
-       /* for(int j = 0; j <= NUM_IRIS_DATA_ROWS-1; j++) {
-            for (int i = 0; i <= NUM_IRIS_DATA_COLUMNS - 1; i++)
-                System.out.print("[" + irisDataSet[i][j] + "]");
-            System.out.println();
-        }*/
 
         return out;
     }
@@ -186,13 +183,6 @@ public class KMeansClusterTestHarness {
             e.printStackTrace();
             out = false;
         }
-
-        // Verify the data capture was valid
-        /*for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++) {
-            for (int i = 0; i <= NUM_KMTEST_DATA_COLUMNS - 1; i++)
-                System.out.print("[" + kmtestDataSet[i][j] + "]");
-            System.out.println();
-        }*/
 
         return out;
     }
@@ -309,7 +299,7 @@ public class KMeansClusterTestHarness {
 
                     // Check exit conditions.  If the centroids are stable or we trigger our safety exit, leave the loop
                     safetyExit++;
-                    if ((matchingCentroids == kValue) || (safetyExit > 10)) {
+                    if ((matchingCentroids == kValue) || (safetyExit > 100)) {
                         stableCentroids = true;
                         System.out.println("\nExit on iteration [" + safetyExit + "] matchingCentriods = " + matchingCentroids);
 
@@ -411,49 +401,34 @@ public class KMeansClusterTestHarness {
         return (original - mean)/stdDev;
     }
 
-    static void normalizeKmtestData()
+    static void normalizeDataSet(float [][] testSet)
     {
-        // Print the list before normalize
-        /*for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++) {
-            for (int i = 0; i <= NUM_KMTEST_DATA_COLUMNS - 1; i++)
-                System.out.print("[" + kmtestDataSet[i][j] + "]");
-            System.out.println();
-        }*/
+        int numRows = testSet[0].length;
+        int numColumns = testSet.length;
 
-        LinkedList<Float> xCoordinates = new LinkedList<>();
-        LinkedList<Float> yCoordinates = new LinkedList<>();
+        HashMap<Integer, LinkedList<Float>> coordinates = new HashMap<>();
+        HashMap<Integer, Float> means = new HashMap<>();
+        HashMap<Integer, Double> stdDevs = new HashMap<>();
 
-        for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++)
+        for(int i=0; i < numColumns; i++)
+            coordinates.put(i, new LinkedList<>());
+
+        for(int j = 0; j < numColumns; j++)
+            for(int k = 0; k < numRows; k++)
+                coordinates.get(j).add(testSet[j][k]);
+
+        for(int i=0; i < numColumns; i++)
         {
-            xCoordinates.add(kmtestDataSet[0][j]);
-            yCoordinates.add(kmtestDataSet[1][j]);
+            means.put(i, calculateMean(coordinates.get(i)));
+            stdDevs.put(i, calculateStdDev(coordinates.get(i)));
         }
 
-        float xMean = calculateMean(xCoordinates);
-        float yMean = calculateMean(yCoordinates);
-        double xStdDev = calculateStdDev(xCoordinates);
-        double yStdDev = calculateStdDev(yCoordinates);
-
-   /*     System.out.println("xMean = " + xMean + " xStdDev = " + xStdDev);
-        System.out.println("yMean = " + yMean + " yStdDev = " + yStdDev);
-*/
-        // Transform the kmDataSet in place with z-score normalization
-        for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++)
-        {
-            // x coordinates
-            float originalX = kmtestDataSet[0][j];
-            kmtestDataSet[0][j] = (float) calculateZScoreNormal(originalX, xMean, xStdDev);
-
-            // y coordinates
-            float originalY = kmtestDataSet[1][j];
-            kmtestDataSet[1][j] = (float) calculateZScoreNormal(originalY, yMean, yStdDev);
-        }
-
-        // Verify the normalize was valid
-        /*for(int j = 0; j <= NUM_KMTEST_DATA_ROWS-1; j++) {
-            for (int i = 0; i <= NUM_KMTEST_DATA_COLUMNS - 1; i++)
-                System.out.print("[" + kmtestDataSet[i][j] + "]");
-            System.out.println();
-        }*/
+        // Transform the testSet in place with z-score normalization
+        for(int j = 0; j < numColumns; j++)
+            for(int k = 0; k < numRows; k++)
+            {
+                float original = testSet[j][k];
+                testSet[j][k] = (float) calculateZScoreNormal(original, means.get(j), stdDevs.get(j));
+            }
     }
 }
