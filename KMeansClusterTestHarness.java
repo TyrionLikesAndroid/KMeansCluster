@@ -17,7 +17,7 @@ public class KMeansClusterTestHarness {
     static float [][] kmtestDataSet;     // Data member for our iris dataset
     static Random random;
 
-    static private class WinningCombination
+    static private class ClusterAnalysisResult
     {
         public double totalSpread = 0f;
         LinkedList<FloatDataRow> centroids = new LinkedList<>();
@@ -198,8 +198,9 @@ public class KMeansClusterTestHarness {
 
     static void analyzeDataSet(int[] kValues, float [][] testSet, FloatDataRow min, FloatDataRow max)
     {
-        // Create a holder for the winning combinations
-        HashMap<Integer, WinningCombination> winners = new HashMap<>();
+        // Create a holder for the winning and losing combinations
+        HashMap<Integer, ClusterAnalysisResult> winners = new HashMap<>();
+        HashMap<Integer, ClusterAnalysisResult> losers = new HashMap<>();
 
         // Analyze the dataset for our values of K
         for(int i = 0; i < kValues.length; i++)
@@ -316,27 +317,32 @@ public class KMeansClusterTestHarness {
                         }
                         System.out.println("Total Spread for this stable outcome = " + totalSpread);
 
-                        // Determine if this is the best combination we have seen yet
+                        // See if our result is valid for this value of K.  Some starting points are so random that
+                        // they end up catching zero members of the dataset.  We want to avoid those because they
+                        // are really only representative of a lower value of K in reality.
+                        boolean validKResult = true;
+                        for (int j = 0; j < kValue; j++)
+                        {
+                            LinkedList<FloatDataRow> list = holdingList.get(j);
+                            if(list.isEmpty()) {
+                                validKResult = false;
+                                break;
+                            }
+                        }
+
+                        // Determine if this is the best or worst combination we have seen yet
                         if ((!winners.containsKey(kValue)) || (totalSpread < winners.get(kValue).totalSpread))
                         {
-                            WinningCombination newWinner = new WinningCombination();
-                            newWinner.totalSpread = totalSpread;
-
-                            for (int j = 0; j < kValue; j++) {
-                                FloatDataRow centroid = centroidList.get(j);
-                                newWinner.centroids.add(new FloatDataRow(centroid.row));
-
-                                LinkedList<FloatDataRow> newList = new LinkedList<>();
-                                Iterator<FloatDataRow> pIter = holdingList.get(j).iterator();
-                                while (pIter.hasNext()) {
-                                    FloatDataRow current = pIter.next();
-                                    newList.add(new FloatDataRow(current.row));
-                                }
-                                newWinner.clusters.put(j, newList);
-                            }
-                            winners.put(kValue, newWinner);
+                            if(validKResult)
+                                winners.put(kValue, createAnalysisResult(kValue, totalSpread, centroidList, holdingList));
                         }
-                    } else {
+                        if ((!losers.containsKey(kValue)) || (totalSpread > losers.get(kValue).totalSpread)) {
+                            if(validKResult)
+                                losers.put(kValue, createAnalysisResult(kValue, totalSpread, centroidList, holdingList));
+                        }
+                    }
+                    else
+                    {
                         // Clear the holding list if we are about to iterate again
                         for (int j = 0; j < kValue; j++) {
                             holdingList.get(j).clear();
@@ -351,11 +357,44 @@ public class KMeansClusterTestHarness {
         System.out.println("********************************************************");
 
         // Dump the winners
+        printAnalysisResult(kValues, winners);
+
+        System.out.println("\n********************************************************");
+        System.out.println("LOSERS");
+        System.out.println("********************************************************");
+
+        //Dump the losers
+        printAnalysisResult(kValues, losers);
+    }
+
+    static ClusterAnalysisResult createAnalysisResult(int kValue, double spread, LinkedList<FloatDataRow> centroidList,
+                                                      HashMap<Integer, LinkedList<FloatDataRow>> holdingList)
+    {
+        ClusterAnalysisResult newResult = new ClusterAnalysisResult();
+        newResult.totalSpread = spread;
+
+        for (int j = 0; j < kValue; j++) {
+            FloatDataRow centroid = centroidList.get(j);
+            newResult.centroids.add(new FloatDataRow(centroid.row));
+
+            LinkedList<FloatDataRow> newList = new LinkedList<>();
+            Iterator<FloatDataRow> pIter = holdingList.get(j).iterator();
+            while (pIter.hasNext()) {
+                FloatDataRow current = pIter.next();
+                newList.add(new FloatDataRow(current.row));
+            }
+            newResult.clusters.put(j, newList);
+        }
+        return newResult;
+    }
+
+    static void printAnalysisResult(int[] kValues, HashMap<Integer, ClusterAnalysisResult> results)
+    {
         for(int i = 0; i < kValues.length; i++)
         {
             int kValue = kValues[i];
-            WinningCombination winner = winners.get(kValue);
-            System.out.println("\nWinner for K=" + kValue + " density=" + winner.totalSpread);
+            ClusterAnalysisResult winner = results.get(kValue);
+            System.out.println("\nResult for K=" + kValue + " density=" + winner.totalSpread);
 
             for(int j = 0; j < kValue; j++)
             {
